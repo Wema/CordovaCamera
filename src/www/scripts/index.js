@@ -31,8 +31,9 @@
           allowEdit: false,
           encodingType: Camera.EncodingType.JPEG,
           saveToPhotoAlbum: true,
-          correctOrientation: true
+          correctOrientation: false
        };
+       options.correctOrientation = document.getElementById("correctOrientationChxBx").checked;
        navigator.camera.getPicture(
           function (data) {
              var image = document.createElement("img");

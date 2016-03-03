@@ -77,7 +77,7 @@ var DEFAULT_ASPECT_RATIO = '1.8';
 var HIGHEST_POSSIBLE_Z_INDEX = 2147483647;
 
 // Resize method
-function resizeImage(successCallback, errorCallback, file, targetWidth, targetHeight, encodingType) {
+function resizeImageAndCorrectOrientation(successCallback, errorCallback, file, targetWidth, targetHeight, encodingType, orientationProperties) {
    var tempPhotoFileName = "";
    if (encodingType == Camera.EncodingType.PNG) {
       tempPhotoFileName = "camera_cordova_temp_return.png";
@@ -91,23 +91,7 @@ function resizeImage(successCallback, errorCallback, file, targetWidth, targetHe
           return fileIO.readBufferAsync(storageFile);
        })
        .then(function (buffer) {
-          var strBase64 = encodeToBase64String(buffer);
-          var imageData = "data:" + file.contentType + ";base64," + strBase64;
-          var image = new Image();
-          image.src = imageData;
-          image.onload = function () {
-             var ratio = Math.min(targetWidth / this.width, targetHeight / this.height);
-             var imageWidth = ratio * this.width;
-             var imageHeight = ratio * this.height;
-
-             var canvas = document.createElement('canvas');
-             var storageFileName;
-
-             canvas.width = imageWidth;
-             canvas.height = imageHeight;
-
-             canvas.getContext("2d").drawImage(this, 0, 0, imageWidth, imageHeight);
-
+          getCanvasFromImage(buffer, file.contentType, targetWidth, targetHeight, function (canvas) {
              var fileContent = canvas.toDataURL(file.contentType).split(',')[1];
 
              var storageFolder = getAppData().localFolder;
@@ -121,7 +105,7 @@ function resizeImage(successCallback, errorCallback, file, targetWidth, targetHe
                  .done(function () {
                     successCallback("ms-appdata:///local/" + storageFileName);
                  }, errorCallback);
-          };
+          });
        })
        .done(null, function (err) {
           errorCallback(err);
@@ -130,26 +114,10 @@ function resizeImage(successCallback, errorCallback, file, targetWidth, targetHe
 }
 
 // Because of asynchronous method, so let the successCallback be called in it.
-function resizeImageBase64(successCallback, errorCallback, file, targetWidth, targetHeight) {
+function resizeImageAndCorrectOrientationBase64(successCallback, errorCallback, file, targetWidth, targetHeight, orientationProperties) {
    fileIO.readBufferAsync(file).done(function (buffer) {
       var strBase64 = encodeToBase64String(buffer);
-      var imageData = "data:" + file.contentType + ";base64," + strBase64;
-
-      var image = new Image();
-      image.src = imageData;
-
-      image.onload = function () {
-         var ratio = Math.min(targetWidth / this.width, targetHeight / this.height);
-         var imageWidth = ratio * this.width;
-         var imageHeight = ratio * this.height;
-         var canvas = document.createElement('canvas');
-
-         canvas.width = imageWidth;
-         canvas.height = imageHeight;
-
-         var ctx = canvas.getContext("2d");
-         ctx.drawImage(this, 0, 0, imageWidth, imageHeight);
-
+      getCanvasFromImage(buffer, file.contentType, targetWidth, targetHeight, function (canvas) {
          // The resized file ready for upload
          var finalFile = canvas.toDataURL(file.contentType);
 
@@ -157,8 +125,62 @@ function resizeImageBase64(successCallback, errorCallback, file, targetWidth, ta
          var arr = finalFile.split(",");
          var newStr = finalFile.substr(arr[0].length + 1);
          successCallback(newStr);
-      };
+      });
    }, function (err) { errorCallback(err); });
+}
+
+function getCanvasFromImage(buffer, contentType, width, height, orientationProperties, callBack) {
+   var strBase64 = encodeToBase64String(buffer);
+   var imageData = "data:" + file.contentType + ";base64," + strBase64;
+
+   var image = new Image();
+   image.src = imageData;
+   image.onload = function () {
+      var targetWidth = width || this.width;
+      var targetHeight = height || this.height;
+      var ratio = Math.min(targetWidth / this.width, targetHeight / this.height);
+      var imageWidth = ratio * this.width;
+      var imageHeight = ratio * this.height;
+      var canvas = document.createElement('canvas');
+      var ctx = canvas.getContext("2d");
+      if (orientationProperties.correctOrientation) {
+         if (orientationProperties.orientation > 4) {
+            var w = imageWidth;
+            imageWidth = imageHeight;
+            imageHeight = w;
+         }
+         switch (orientationProperties.orientation) {
+            case 1:
+               ctx.transform(1, 0, 0, 1, 0, 0);
+               break;
+            case 2:
+               ctx.transform(-1, 0, 0, 1, imageWidth, 0);
+               break;
+            case 3:
+               ctx.transform(-1, 0, 0, -1, imageWidth, imageHeight);
+               break;
+            case 4:
+               ctx.transform(1, 0, 0, -1, 0, imageHeight);
+               break;
+            case 5:
+               ctx.transform(0, 1, 1, 0, 0, 0);
+               break;
+            case 6:
+               ctx.transform(0, 1, -1, 0, imageWidth, 0);
+               break;
+            case 7:
+               ctx.transform(0, -1, -1, 0, imageWidth, imageHeight);
+               break;
+            case 8:
+               ctx.transform(0, -1, 1, 0, 0, imageHeight);
+               break;
+         }
+      }
+      canvas.width = imageWidth;
+      canvas.height = imageHeight;
+      ctx.drawImage(this, 0, 0, imageWidth, imageHeight);
+      callBack(canvas);
+   };
 }
 
 function takePictureFromFile(successCallback, errorCallback, args) {
@@ -172,10 +194,11 @@ function takePictureFromFile(successCallback, errorCallback, args) {
 
 function takePictureFromFileWP(successCallback, errorCallback, args) {
    var mediaType = args[6],
-       destinationType = args[1],
-       targetWidth = args[3],
-       targetHeight = args[4],
-       encodingType = args[5];
+      destinationType = args[1],
+      targetWidth = args[3],
+      targetHeight = args[4],
+      encodingType = args[5],
+      correctOrientation = args[8];
 
    /*
        Need to add and remove an event listener to catch activation state
@@ -191,21 +214,31 @@ function takePictureFromFileWP(successCallback, errorCallback, args) {
             return;
          }
          if (destinationType == Camera.DestinationType.FILE_URI || destinationType == Camera.DestinationType.NATIVE_URI) {
-            if (targetHeight > 0 && targetWidth > 0) {
-               resizeImage(successCallback, errorCallback, file, targetWidth, targetHeight, encodingType);
+            if ((targetHeight > 0 && targetWidth > 0) || correctOrientation) {
+               file.properties.getImagePropertiesAsync().done(function (prop) {
+                  prop.correctOrientation = correctOrientation;
+                  resizeImageAndCorrectOrientation(successCallback, errorCallback, file, targetWidth, targetHeight, encodingType, prop);
+               }, function () {
+                  errorCallback("Can't retrive ImageProperties.");
+               });
             }
             else {
                var storageFolder = getAppData().localFolder;
                file.copyAsync(storageFolder, file.name, Windows.Storage.NameCollisionOption.replaceExisting).done(function (storageFile) {
-                     successCallback("ms-appdata:///local/" + storageFile.name);
+                  successCallback("ms-appdata:///local/" + storageFile.name);
                }, function () {
                   errorCallback("Can't access localStorage folder.");
                });
             }
          }
          else {
-            if (targetHeight > 0 && targetWidth > 0) {
-               resizeImageBase64(successCallback, errorCallback, file, targetWidth, targetHeight);
+            if ((targetHeight > 0 && targetWidth > 0) || correctOrientation) {
+               file.properties.getImagePropertiesAsync().done(function (prop) {
+                  prop.correctOrientation = correctOrientation;
+                  resizeImageAndCorrectOrientationBase64(successCallback, errorCallback, file, targetWidth, targetHeight, prop);
+               }, function () {
+                  errorCallback("Can't retrive ImageProperties.");
+               });
             } else {
                fileIO.readBufferAsync(file).done(function (buffer) {
                   var strBase64 = encodeToBase64String(buffer);
@@ -240,7 +273,8 @@ function takePictureFromFileWindows(successCallback, errorCallback, args) {
        destinationType = args[1],
        targetWidth = args[3],
        targetHeight = args[4],
-       encodingType = args[5];
+       encodingType = args[5],
+       correctOrientation = args[8];
 
    var fileOpenPicker = new Windows.Storage.Pickers.FileOpenPicker();
    if (mediaType == Camera.MediaType.PICTURE) {
@@ -262,21 +296,31 @@ function takePictureFromFileWindows(successCallback, errorCallback, args) {
          return;
       }
       if (destinationType == Camera.DestinationType.FILE_URI || destinationType == Camera.DestinationType.NATIVE_URI) {
-         if (targetHeight > 0 && targetWidth > 0) {
-            resizeImage(successCallback, errorCallback, file, targetWidth, targetHeight, encodingType);
+         if ((targetHeight > 0 && targetWidth > 0) || correctOrientation) {
+            file.properties.getImagePropertiesAsync().done(function (prop) {
+               prop.correctOrientation = correctOrientation;
+               resizeImageAndCorrectOrientation(successCallback, errorCallback, file, targetWidth, targetHeight, encodingType, prop);
+            }, function () {
+               errorCallback("Can't retrive ImageProperties.");
+            });
          }
          else {
             var storageFolder = getAppData().localFolder;
             file.copyAsync(storageFolder, file.name, Windows.Storage.NameCollisionOption.replaceExisting).done(function (storageFile) {
-                  successCallback("ms-appdata:///local/" + storageFile.name);
+               successCallback("ms-appdata:///local/" + storageFile.name);
             }, function () {
                errorCallback("Can't access localStorage folder.");
             });
          }
       }
       else {
-         if (targetHeight > 0 && targetWidth > 0) {
-            resizeImageBase64(successCallback, errorCallback, file, targetWidth, targetHeight);
+         if ((targetHeight > 0 && targetWidth > 0) || correctOrientation) {
+            file.properties.getImagePropertiesAsync().done(function (prop) {
+               prop.correctOrientation = correctOrientation;
+               resizeImageAndCorrectOrientationBase64(successCallback, errorCallback, file, targetWidth, targetHeight, prop);
+            }, function () {
+               errorCallback("Can't retrive ImageProperties.");
+            });
          } else {
             fileIO.readBufferAsync(file).done(function (buffer) {
                var strBase64 = encodeToBase64String(buffer);
@@ -306,6 +350,7 @@ function takePictureFromCameraWP(successCallback, errorCallback, args) {
        targetHeight = args[4],
        encodingType = args[5],
        saveToPhotoAlbum = args[9],
+       correctOrientation = args[8],
        cameraDirection = args[11],
        capturePreview = null,
        cameraCaptureButton = null,
@@ -514,7 +559,8 @@ function takePictureFromCameraWP(successCallback, errorCallback, args) {
                 targetHeight: targetHeight,
                 targetWidth: targetWidth,
                 encodingType: encodingType,
-                saveToPhotoAlbum: saveToPhotoAlbum
+                saveToPhotoAlbum: saveToPhotoAlbum,
+                correctOrientation: correctOrientation
              }, successCallback, errorCallback);
           }, function (err) {
              destroyCameraPreview();
@@ -679,6 +725,7 @@ function takePictureFromCameraWindows(successCallback, errorCallback, args) {
        encodingType = args[5],
        allowCrop = !!args[7],
        saveToPhotoAlbum = args[9],
+       correctOrientation = args[8],
        WMCapture = Windows.Media.Capture,
        cameraCaptureUI = new WMCapture.CameraCaptureUI();
 
@@ -722,7 +769,8 @@ function takePictureFromCameraWindows(successCallback, errorCallback, args) {
          targetHeight: targetHeight,
          targetWidth: targetWidth,
          encodingType: encodingType,
-         saveToPhotoAlbum: saveToPhotoAlbum
+         saveToPhotoAlbum: saveToPhotoAlbum,
+         correctOrientation: correctOrientation
       }, successCallback, errorCallback);
    }, function () {
       errorCallback("Fail to capture a photo.");
@@ -733,16 +781,26 @@ function savePhoto(picture, options, successCallback, errorCallback) {
    // success callback for capture operation
    var success = function (picture) {
       if (options.destinationType == Camera.DestinationType.FILE_URI || options.destinationType == Camera.DestinationType.NATIVE_URI) {
-         if (options.targetHeight > 0 && options.targetWidth > 0) {
-            resizeImage(successCallback, errorCallback, picture, options.targetWidth, options.targetHeight, options.encodingType);
+         if ((options.targetHeight > 0 && options.targetWidth > 0) || options.correctOrientation) {
+            picture.properties.getImagePropertiesAsync().done(function (prop) {
+               prop.correctOrientation = options.correctOrientation;
+               resizeImageAndCorrectOrientation(successCallback, errorCallback, picture, options.targetWidth, options.targetHeight, options.encodingType, prop);
+            }, function () {
+               errorCallback("Can't retrive ImageProperties.");
+            });
          } else {
             picture.copyAsync(getAppData().localFolder, picture.name, OptUnique).done(function (copiedFile) {
                successCallback("ms-appdata:///local/" + copiedFile.name);
             }, errorCallback);
          }
       } else {
-         if (options.targetHeight > 0 && options.targetWidth > 0) {
-            resizeImageBase64(successCallback, errorCallback, picture, options.targetWidth, options.targetHeight);
+         if ((options.targetHeight > 0 && options.targetWidth > 0) || options.correctOrientation) {
+            picture.properties.getImagePropertiesAsync().done(function (prop) {
+               prop.correctOrientation = options.correctOrientation;
+               resizeImageAndCorrectOrientationBase64(successCallback, errorCallback, picture, options.targetWidth, options.targetHeight, prop);
+            }, function () {
+               errorCallback("Can't retrive ImageProperties.");
+            });
          } else {
             fileIO.readBufferAsync(picture).done(function (buffer) {
                var strBase64 = encodeToBase64String(buffer);
