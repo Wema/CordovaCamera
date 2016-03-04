@@ -91,7 +91,7 @@ function resizeImageAndCorrectOrientation(successCallback, errorCallback, file, 
           return fileIO.readBufferAsync(storageFile);
        })
        .then(function (buffer) {
-          getCanvasFromImage(buffer, file.contentType, targetWidth, targetHeight, function (canvas) {
+          getCanvasFromImage(buffer, file.contentType, targetWidth, targetHeight, orientationProperties, function (canvas) {
              var fileContent = canvas.toDataURL(file.contentType).split(',')[1];
 
              var storageFolder = getAppData().localFolder;
@@ -117,7 +117,7 @@ function resizeImageAndCorrectOrientation(successCallback, errorCallback, file, 
 function resizeImageAndCorrectOrientationBase64(successCallback, errorCallback, file, targetWidth, targetHeight, orientationProperties) {
    fileIO.readBufferAsync(file).done(function (buffer) {
       var strBase64 = encodeToBase64String(buffer);
-      getCanvasFromImage(buffer, file.contentType, targetWidth, targetHeight, function (canvas) {
+      getCanvasFromImage(buffer, file.contentType, targetWidth, targetHeight, orientationProperties, function (canvas) {
          // The resized file ready for upload
          var finalFile = canvas.toDataURL(file.contentType);
 
@@ -131,13 +131,13 @@ function resizeImageAndCorrectOrientationBase64(successCallback, errorCallback, 
 
 function getCanvasFromImage(buffer, contentType, width, height, orientationProperties, callBack) {
    var strBase64 = encodeToBase64String(buffer);
-   var imageData = "data:" + file.contentType + ";base64," + strBase64;
+   var imageData = "data:" + contentType + ";base64," + strBase64;
 
    var image = new Image();
    image.src = imageData;
    image.onload = function () {
-      var targetWidth = width || this.width;
-      var targetHeight = height || this.height;
+      var targetWidth = width > 0 ? width : this.width;
+      var targetHeight = height > 0 ? height : this.height;
       var ratio = Math.min(targetWidth / this.width, targetHeight / this.height);
       var imageWidth = ratio * this.width;
       var imageHeight = ratio * this.height;
@@ -149,6 +149,8 @@ function getCanvasFromImage(buffer, contentType, width, height, orientationPrope
             imageWidth = imageHeight;
             imageHeight = w;
          }
+         canvas.width = imageWidth;
+         canvas.height = imageHeight;
          switch (orientationProperties.orientation) {
             case 1:
                ctx.transform(1, 0, 0, 1, 0, 0);
@@ -175,10 +177,13 @@ function getCanvasFromImage(buffer, contentType, width, height, orientationPrope
                ctx.transform(0, -1, 1, 0, 0, imageHeight);
                break;
          }
+         ctx.drawImage(this, 0, 0);
       }
-      canvas.width = imageWidth;
-      canvas.height = imageHeight;
-      ctx.drawImage(this, 0, 0, imageWidth, imageHeight);
+      else {
+         canvas.width = imageWidth;
+         canvas.height = imageHeight;
+         ctx.drawImage(this, 0, 0, imageWidth, imageHeight);
+      }
       callBack(canvas);
    };
 }
@@ -216,8 +221,11 @@ function takePictureFromFileWP(successCallback, errorCallback, args) {
          if (destinationType == Camera.DestinationType.FILE_URI || destinationType == Camera.DestinationType.NATIVE_URI) {
             if ((targetHeight > 0 && targetWidth > 0) || correctOrientation) {
                file.properties.getImagePropertiesAsync().done(function (prop) {
-                  prop.correctOrientation = correctOrientation;
-                  resizeImageAndCorrectOrientation(successCallback, errorCallback, file, targetWidth, targetHeight, encodingType, prop);
+                  var orientationProperties = {
+                     correctOrientation: correctOrientation,
+                     orientation: prop.orientation
+                  };
+                  resizeImageAndCorrectOrientation(successCallback, errorCallback, file, targetWidth, targetHeight, encodingType, orientationProperties);
                }, function () {
                   errorCallback("Can't retrive ImageProperties.");
                });
@@ -234,8 +242,11 @@ function takePictureFromFileWP(successCallback, errorCallback, args) {
          else {
             if ((targetHeight > 0 && targetWidth > 0) || correctOrientation) {
                file.properties.getImagePropertiesAsync().done(function (prop) {
-                  prop.correctOrientation = correctOrientation;
-                  resizeImageAndCorrectOrientationBase64(successCallback, errorCallback, file, targetWidth, targetHeight, prop);
+                  var orientationProperties = {
+                     correctOrientation: correctOrientation,
+                     orientation: prop.orientation
+                  };
+                  resizeImageAndCorrectOrientationBase64(successCallback, errorCallback, file, targetWidth, targetHeight, orientationProperties);
                }, function () {
                   errorCallback("Can't retrive ImageProperties.");
                });
@@ -298,8 +309,11 @@ function takePictureFromFileWindows(successCallback, errorCallback, args) {
       if (destinationType == Camera.DestinationType.FILE_URI || destinationType == Camera.DestinationType.NATIVE_URI) {
          if ((targetHeight > 0 && targetWidth > 0) || correctOrientation) {
             file.properties.getImagePropertiesAsync().done(function (prop) {
-               prop.correctOrientation = correctOrientation;
-               resizeImageAndCorrectOrientation(successCallback, errorCallback, file, targetWidth, targetHeight, encodingType, prop);
+               var orientationProperties = {
+                  correctOrientation: correctOrientation,
+                  orientation: prop.orientation
+               };
+               resizeImageAndCorrectOrientation(successCallback, errorCallback, file, targetWidth, targetHeight, encodingType, orientationProperties);
             }, function () {
                errorCallback("Can't retrive ImageProperties.");
             });
@@ -316,8 +330,11 @@ function takePictureFromFileWindows(successCallback, errorCallback, args) {
       else {
          if ((targetHeight > 0 && targetWidth > 0) || correctOrientation) {
             file.properties.getImagePropertiesAsync().done(function (prop) {
-               prop.correctOrientation = correctOrientation;
-               resizeImageAndCorrectOrientationBase64(successCallback, errorCallback, file, targetWidth, targetHeight, prop);
+               var orientationProperties = {
+                  correctOrientation: correctOrientation,
+                  orientation: prop.orientation
+               };
+               resizeImageAndCorrectOrientationBase64(successCallback, errorCallback, file, targetWidth, targetHeight, orientationProperties);
             }, function () {
                errorCallback("Can't retrive ImageProperties.");
             });
@@ -783,8 +800,11 @@ function savePhoto(picture, options, successCallback, errorCallback) {
       if (options.destinationType == Camera.DestinationType.FILE_URI || options.destinationType == Camera.DestinationType.NATIVE_URI) {
          if ((options.targetHeight > 0 && options.targetWidth > 0) || options.correctOrientation) {
             picture.properties.getImagePropertiesAsync().done(function (prop) {
-               prop.correctOrientation = options.correctOrientation;
-               resizeImageAndCorrectOrientation(successCallback, errorCallback, picture, options.targetWidth, options.targetHeight, options.encodingType, prop);
+               var orientationProperties = {
+                  correctOrientation: options.correctOrientation,
+                  orientation: prop.orientation
+               };
+               resizeImageAndCorrectOrientation(successCallback, errorCallback, picture, options.targetWidth, options.targetHeight, options.encodingType, orientationProperties);
             }, function () {
                errorCallback("Can't retrive ImageProperties.");
             });
@@ -796,8 +816,11 @@ function savePhoto(picture, options, successCallback, errorCallback) {
       } else {
          if ((options.targetHeight > 0 && options.targetWidth > 0) || options.correctOrientation) {
             picture.properties.getImagePropertiesAsync().done(function (prop) {
-               prop.correctOrientation = options.correctOrientation;
-               resizeImageAndCorrectOrientationBase64(successCallback, errorCallback, picture, options.targetWidth, options.targetHeight, prop);
+               var orientationProperties = {
+                  correctOrientation: options.correctOrientation,
+                  orientation: prop.orientation
+               };
+               resizeImageAndCorrectOrientationBase64(successCallback, errorCallback, picture, options.targetWidth, options.targetHeight, orientationProperties);
             }, function () {
                errorCallback("Can't retrive ImageProperties.");
             });
