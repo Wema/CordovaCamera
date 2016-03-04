@@ -24,6 +24,9 @@
     };
 
     function getImage() {
+
+       var form = document.querySelector('form');
+       var data = new FormData(form);
        var options = {
           quality: 100,
           destinationType: Camera.DestinationType.FILE_URI,

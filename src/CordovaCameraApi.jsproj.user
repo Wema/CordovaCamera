@@ -2,6 +2,7 @@
 <Project ToolsVersion="14.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <PropertyGroup>
     <ReferenceCachePath>C:\Users\wwuyts\AppData\Local\Temp\CordovaCameraApi2_refcache</ReferenceCachePath>
+    <ShowAllFiles>true</ShowAllFiles>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Android'">
     <DebuggerFlavor>AndroidEmulator</DebuggerFlavor>
@@ -12,7 +13,7 @@
     <WindowsMobileEmulatorID>602A95E3-B42A-4AE5-BA1C-9C4E38854668;Mobile Emulator 10.0.10240.0 1080p 6 inch 2GB</WindowsMobileEmulatorID>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Windows-AnyCPU'">
-    <DebuggerFlavor>PhoneDevice81</DebuggerFlavor>
+    <DebuggerFlavor>WindowsLocal</DebuggerFlavor>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Windows-ARM'">
     <DebuggerFlavor>PhoneDevice81</DebuggerFlavor>

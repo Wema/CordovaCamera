@@ -13,11 +13,48 @@
    <link href="css/index.css" rel="stylesheet" />
 </head>
 <body>
-   Correct orientation ? <input type="checkbox" id="correctOrientationChxBx" />
-   <button id="testBtn">Test</button>
-   <!-- Cordova reference, this is added to your app when it's built. -->
-   <script src="cordova.js"></script>
-   <script src="scripts/platformOverrides.js"></script>
-   <script src="scripts/index.js"></script>
+   <form id="cameraForm">
+      <label>Quality :</label>
+      <br />
+      <input type="range" name="quality" min="0" max="100" value="50" />
+      <br />
+      <label>Destination Type :</label>
+      <br />
+      <div>
+         File <input name="destinationType" value="1" type="radio" />
+         Native <input name="destinationType" value="2" type="radio" />
+         Data <input name="destinationType" value="0" type="radio" />
+      </div>
+      <br />
+      <label>Allow edit :</label>
+      <input name="allowEdit" type="checkbox" id="allowEditChxBx" />
+      <br />
+      <label>Encoding Type :</label>
+      <br />
+      <div>
+         JPEG <input name="encodingType" value="0" type="radio" />
+         PNG <input name="encodingType" value="1" type="radio" />
+      </div>
+      <br />
+      <label>Width :</label>
+      <br />
+      <input name="targetWidth" type="number" />
+      <br />
+      <label>Height :</label>
+      <br />
+      <input name="targetHeight" type="number" />
+      <br />
+      <label>Correct orientation :</label>
+      <input name="correctOrientation" id="correctOrientationChxBx" type="checkbox" />
+      <br />
+      <label>Save to photo album :</label>
+      <input name="saveToPhotoAlbum" type="checkbox" id="saveToPhotoAlbChxBx" />
+      <br/>
+      <button type="submit" id="testBtn">Test</button>
+   </form>
+<!-- Cordova reference, this is added to your app when it's built. -->
+<script src="cordova.js"></script>
+<script src="scripts/platformOverrides.js"></script>
+<script src="scripts/index.js"></script>
 </body>
 </html>
